@@ -1,0 +1,113 @@
+
+---
+title: "DW Housing Final Report"
+subtitle: "MongoDB ShopDB Tasks 1-5"
+author: "Data Warehouse Team"
+date: "2026-04-24"
+date-format: "D MMMM YYYY"
+format:
+  pptx:
+    toc: true
+    slide-number-format: "| %d |"
+  revealjs:
+    theme: solarized
+    transition: fade
+---
+
+
+# `{html}<img src="https://www.mongodb.com/favicon.ico" width="50">` ShopDB Overview
+
+**Python Script Setup**
+- 1K customers, 500 products, 2K orders with Faker [web:2][web:5]
+- 2% bad records (missing fields), cleaned via updates
+- Bulk `insert_many()` for efficiency
+
+```python
+db.customers.insert_many(customers)
+```
+
+# Task 1: Customer Age Increment
+
+**Goal**: +1 to all `age` fields, reset via backup
+
+```javascript
+db.customers.updateMany({}, { $inc: { age: 1 } })
+```
+
+**Reset**:
+```javascript
+db.customers.updateMany({}, { $set: { age: "$original_age" } })
+```
+
+Scales to 1K+ docs [web:11]
+
+# Task 2: Product Stock Reduction
+
+**Goal**: Simulate purchase on eligible product
+
+```javascript
+// Find
+db.products.findOne({ stock: { $gt: 0 } })
+
+// Reduce  
+db.products.updateOne({ _id: 2001 }, { $inc: { stock: -1 } })
+```
+
+**Reset**: `$set: { stock: 50 }` [web:7]
+
+# Task 3: Premium Emails Only
+
+**Goal**: `is_premium: true`, project `email` (no `_id`)
+
+```javascript
+db.customers.find(
+  { is_premium: true },
+  { _id: 0, email: 1 }
+)
+```
+
+~10% of customers expected [web:15]
+
+# Task 4: 30-Day Refunds
+
+**Fixed Range**: 2025-04-02 to 2025-05-01
+
+```javascript
+db.orders.find({
+  order_date: {
+    $gte: "2025-04-02", $lte: "2025-05-01"
+  },
+  payment_status: "refunded"
+})
+```
+
+Benchmark-friendly [web:14]
+
+# Task 5: Payment Status Counts
+
+**Aggregation Pipeline**:
+
+```javascript
+db.orders.aggregate([
+  { $match: { payment_status: { $in: ["paid", "pending", "refunded"] } } },
+  { $group: { _id: "$payment_status", count: { $sum: 1 } } }
+])
+```
+
+| Status   | Count |
+|----------|-------|
+| paid     | 1600  |
+| pending  | 250   |
+| refunded | 150   | [web:19]
+
+# Complete DW Pipeline ✅
+
+**Generation → Tasks → Warehouse**
+
+1. **Generate/Clean** shopdb (Python)
+2. **Execute Tasks 1-5** (with resets)
+3. **<1s per operation** on 2.5K docs
+4. **Load results** to Snowflake/BigQuery
+5. **Housing analytics ready** [web:4][web:20]
+
+---
