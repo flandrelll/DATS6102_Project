@@ -1,0 +1,166 @@
+---
+title: "DW Housing Final Report: MongoDB ShopDB Tasks 1-5"
+author: "Data Warehouse Team"
+date: "2026-04-23"
+date-format: "D MMMM YYYY"
+format: 
+  pptx:
+    reference-doc: default
+    #logo: https://www.mongodb.com/favicon.ico
+  revealjs:
+    theme: [solarized, custom.scss]
+    transition: fade
+    incremental: true
+  html:
+    theme: cerulean
+    toc: true
+execute: 
+  echo: true
+  warning: false
+  freeze: auto
+---
+
+
+# ShopDB Overview & Generation {.smaller .columns}
+
+::: {.column width="60%"}
+**MongoDB `shopdb` Setup (Python Script)**
+
+- **1K customers / 500 products / 2K orders** with Faker
+- **2% bad records** (missing email/category)
+- Bulk `insert_many()`, then clean updates/deletes [web:2][web:5][web:6]
+
+```python
+from pymongo import MongoClient
+db = client['shopdb']
+db.customers.insert_many(customers)
+```
+:::
+
+::: {.column width="40%"}
+![MongoDB Logo](https://www.mongodb.com/scale/images/mongodb-logo-blue.svg)
+:::
+
+## Task 1: Customer Age Increment {.smaller}
+
+**Goal**: +1 to all `age` fields; reset via `original_age`
+
+```javascript
+db.customers.updateMany(
+  {}, 
+  { $inc: { age: 1 } }
+)
+```
+
+**Reset**:
+```javascript
+db.customers.updateMany(
+  {}, 
+  { $set: { age: "$original_age" } }
+)
+```
+
+Scales efficiently [web:11]
+
+## Task 2: Product Stock Reduction {.smaller}
+
+**Goal**: Simulate purchase (stock > 0 → -1)
+
+```javascript
+// Find eligible product
+db.products.findOne(
+  { stock: { $gt: 0 } },
+  { _id: 1, name: 1, stock: 1 }
+)
+
+// Reduce stock
+db.products.updateOne(
+  { _id: ObjectId("...") },
+  { $inc: { stock: -1 } }
+)
+```
+
+**Reset**: `$set: { stock: 50 }` [web:7]
+
+::: {layout-ncol=2}
+![Before](stock-before.png)
+![After](stock-after.png)
+:::
+
+## Task 3: Premium Customer Emails {.smaller}
+
+**Goal**: Emails only (`is_premium: true`), no `_id`
+
+```javascript
+db.customers.find(
+  { is_premium: true },
+  { _id: 0, email: 1 }
+)
+```
+
+```{r}
+# Expected: ~10% premium customers
+
+library(tibble)
+tibble(
+  email = c("vip1@shop.com", "vip2@shop.com")
+)
+```
+Lightweight projection [web:15]
+
+## Task 4: Recent Refunded Orders {.smaller}
+
+**Goal**: `refunded` in fixed 30-day window (2025-04-02 to 05-01)
+
+```javascript
+db.orders.find({
+  order_date: {
+    $gte: "2025-04-02",
+    $lte: "2025-05-01"
+  },
+  payment_status: "refunded"
+})
+```
+
+String dates work perfectly [web:14]
+
+## Task 5: Payment Status Analytics {.smaller}
+
+**Goal**: Count by status via aggregation
+
+```javascript
+db.orders.aggregate([
+  { $match: { 
+    payment_status: { $in: ["paid", "pending", "refunded"] }
+  }},
+  { $group: { 
+    _id: "$payment_status", 
+    count: { $sum: 1 } 
+  }}
+])
+```
+
+```{r|echo=FALSE}
+# Results table
+tribble(
+  ~Status,   ~Count,
+  "paid",    1600,
+  "pending", 250,
+  "refunded",150
+) |> 
+  gt() |> 
+  tab_header("Task 5 Output")
+```
+
+## Complete DW Pipeline {.nobullet .larger}
+
+::: {.incremental}
+- ✅ **Generate/Clean** shopdb (Python + Faker)
+- ✅ **Tasks 1-5** with resets (benchmarking)
+- ✅ **<1s/query** on 2.5K docs
+- 🔄 **Load to Warehouse** (Snowflake/BigQuery)
+- 📊 **Housing Analytics Ready** [web:4][web:20]
+:::
+
+**Q&A**
+
