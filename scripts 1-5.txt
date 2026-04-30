@@ -227,6 +227,187 @@ for (let i = 0; i < 10; i++) {
     times.push(end - start);
 }
 
+
+
+this put in the same format : Task6
+const prem_id = db.orders.aggregate([{$group:{ _id:"$customer_id",total_orders:{$sum:1}, total_spending:{$sum:"$total_amount"}}},{$match:{$or:[{total_orders:{$gt:5}},{total_spending:{$gt:1000}}]}}]).toArray().map(d=>d._id);
+db.customers.updateMany({_id:{$in:prem_id}},{$set:{is_premium:true}});
+First, we group the orders by customer_id and calculate the total number of orders and total spending for each customer.
+Then, we select customers who have more than 5 orders or total spending greater than 1000.
+Next, we extract the customer_id values from these results and store them in an array.
+Finally, we use updateMany to update these customers by setting their is_premium field to true.
+
+Task 7
+db.products.find({price:{$gt: 200}},{name:1, category:1,price:1,_id:0})
+This query retrieves all products with price greater than 200 and hide_id, show only the name, category, and price fields.
+
+Task 8
+db.products.findOne();
+db.orders.aggregate([{$match: {"items.product_id": 1}},{$project: {_id: 1,customer_id: 1,items: {$filter:{input: "$items", as: "item",cond: {$eq: ["$$item.product_id", 1]}}}}}])
+
+This query first selects orders that contain the specified product_id, then uses $filter to return only the matching items from the items array.
+
+Task 9
+const ids = db.orders.distinct("customer_id");db.customers.deleteMany({_id: {$nin: ids}})
+This task is completed in two steps. First, we retrieve all customer_id values that appear in the orders collection. Then, we delete customers whose _id does not appear in this set.
+
+Task 10
+const youngids = db.customers.find({age: {$lt: 25}}).toArray().map(d=>d._id);
+db.orders.aggregate([{$match: {customer_id: {$in: youngids}}},{$unwind: "$items"},{$group: {_id: "$items.category"}}])
+This task is completed in two steps. First, we retrieve the IDs of customers whose age is less than 25. Then, we use these IDs to filter orders and apply $unwind on the items array to expand them, followed by grouping by items.category to obtain distinct categories.
+
+Task 11
+db.customers.find({$or: [{email: {$regex:"@gmail\\\\.com$"}},{email:{$regex: "@yahoo\\\\.com$"}}]})
+This query retrieves customers whose email addresses end with @gmail.com or @yahoo.com. A regular expression is used to match these domains at the end of the email string. like this format: Task 1: Increase all customers’ age by 1
+Goal: increment every customer’s age by 1, and reset to original before each timed run.
+
+1. Increase ages
+use shopdb
+
+db.customers.updateMany(
+{},
+{ $inc: { age: 1 } }
+)
+
+2.Reset before next run (example)
+
+Age stored in a backup field like original_age:
+db.customers.updateMany(
+{},
+{ $set: { age: "$original_age" } }
+)
+
+
+Task 2: Reduce a product’s stock after purchase
+Goal: pick one product with stock > 0; reduce its stock by 1, and reset before each run.
+
+1. Find a suitable product ID
+
+db.products.findOne(
+{ stock: { $gt: 0 } },
+{ projection: { _id: 1, name: 1, stock: 1 } }
+)
+
+2 Reduce stock by 1
+db.products.updateOne(
+{ _id: 2001 },
+{ $inc: { stock: -1 } }
+)
+
+3.Reset stock before next timed run
+db.products.updateOne(
+{ _id: 1 },
+{ $set: { stock: 50 } }
+)
+
+
+Task 3: List emails of premium customers
+Goal: return only the email field for customers where is_premium is true, projected without _id.
+
+db.customers.find(
+{ is_premium: true },
+{ _id: 0, email: 1 }
+)
+Task 6: Identify and mark premium customers
+Goal: mark customers as premium if they have more than 5 orders or total spending greater than 1000.
+
+Aggregate orders by customer
+use shopdb
+
+const prem_id = db.orders.aggregate([
+{ $group: {
+_id: "$customer_id",
+total_orders: { $sum: 1 },
+total_spending: { $sum: "$total_amount" }
+}
+},
+{ $match: {
+$or: [
+{ total_orders: { $gt: 5 } },
+{ total_spending: { $gt: 1000 } }
+]
+}
+} ]).toArray().map(d => d._id);
+
+Update customers as premium
+db.customers.updateMany(
+{ _id: { $in: prem_id } },
+{ $set: { is_premium: true } }
+)
+
+Task 7: Find expensive products
+Goal: retrieve products with price greater than 200, showing only name, category, and price.
+
+db.products.find(
+{ price: { $gt: 200 } },
+{ name: 1, category: 1, price: 1, _id: 0 }
+)
+
+Task 8: Find orders containing a specific product
+Goal: return orders that include a given product_id and show only matching items.
+
+Example product reference
+db.products.findOne();
+
+Filter orders by product
+db.orders.aggregate([
+{ $match: { "items.product_id": 1 } },
+{ $project: {
+_id: 1,
+customer_id: 1,
+items: {
+$filter: {
+input: "$items",
+as: "item",
+cond: { $eq: ["$$item.product_id", 1] }
+}
+}
+}
+}
+])
+
+
+Task 9: Remove customers with no orders
+Goal: delete customers who do not appear in the orders collection.
+
+Get customer IDs from orders
+const ids = db.orders.distinct("customer_id");
+
+Delete non-matching customers
+db.customers.deleteMany(
+{ _id: { $nin: ids } }
+)
+
+Task 10: Find categories purchased by young customers
+Goal: identify distinct product categories purchased by customers under age 25.
+
+Get young customer IDs
+const youngids = db.customers.find(
+{ age: { $lt: 25 } }
+).toArray().map(d => d._id);
+
+Aggregate categories from their orders
+db.orders.aggregate([
+{ $match: { customer_id: { $in: youngids } } },
+{ $unwind: "$items" },
+{ $group: {
+_id: "$items.category"
+}
+}
+])
+
+
+Task 11: Find customers by email domain
+Goal: retrieve customers whose email ends with @gmail.com or @yahoo.com.
+
+db.customers.find(
+{ $or: [
+{ email: { $regex: "@gmail\.com$" } },
+{ email: { $regex: "@yahoo\.com$" } }
+]
+} )
+
+
 // average time
 let total = times.reduce((a, b) => a + b, 0);
 let avg = total / times.length;
